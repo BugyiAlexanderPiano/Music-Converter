@@ -191,19 +191,19 @@ class WaveformView(tk.Canvas):
         self.redraw()
 
     # ---- koordináták ------------------------------------------------------
-    def _w(self):
+    def _width(self):
         return max(self.winfo_width(), 50)
 
     def x_of(self, idx: float) -> float:
-        return (idx - self.v0) / max(1e-9, (self.v1 - self.v0)) * self._w()
+        return (idx - self.v0) / max(1e-9, (self.v1 - self.v0)) * self._width()
 
     def idx_of(self, x: float) -> int:
-        return int(round(self.v0 + x / self._w() * (self.v1 - self.v0)))
+        return int(round(self.v0 + x / self._width() * (self.v1 - self.v0)))
 
     # ---- rajzolás --------------------------------------------------------
     def redraw(self):
         self.delete("all")
-        w = self._w()
+        w = self._width()
         h = max(self.winfo_height(), 40)
         if self.audio is None:
             self.create_text(w / 2, h / 2, text="Tölts be egy WAV fájlt…", fill=T.MUTED,
@@ -321,7 +321,7 @@ class WaveformView(tk.Canvas):
         center = self.idx_of(x)
         span = max(16, int((self.v1 - self.v0) * factor))
         span = min(span, self.audio.frames * 2)
-        frac = x / self._w()
+        frac = x / self._width()
         self.v0 = int(center - span * frac)
         self.v1 = self.v0 + span
         self.redraw()
@@ -333,7 +333,7 @@ class WaveformView(tk.Canvas):
         if not self._pan:
             return
         x0, a, b = self._pan
-        d = int((x0 - e.x) / self._w() * (b - a))
+        d = int((x0 - e.x) / self._width() * (b - a))
         self.v0, self.v1 = a + d, b + d
         self.redraw()
 

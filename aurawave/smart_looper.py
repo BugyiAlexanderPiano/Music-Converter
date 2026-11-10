@@ -67,8 +67,8 @@ class SmartLooperWindow(tk.Toplevel):
         main.rowconfigure(0, weight=1)
         self._build_list(main)
         self._build_editor(main)
-        self.keys = PianoKeyboard(self, height=96)
-        self.keys.pack(fill="x", padx=12)
+        self.keyboard = PianoKeyboard(self, height=96)
+        self.keyboard.pack(fill="x", padx=12)
         self.log = LogBox(self, height=4)
         self.log.pack(fill="x", padx=12, pady=(6, 10))
         self.protocol("WM_DELETE_WINDOW", self._close)
@@ -251,7 +251,7 @@ class SmartLooperWindow(tk.Toplevel):
         zones = []
         for i, (r, lo, hi) in enumerate(dsp.key_zones(roots)):
             zones.append((r, lo, hi, ZONE_COLORS[i % len(ZONE_COLORS)], note_name(r)))
-        self.keys.set_zones(zones, self.cur.root if self.cur else None)
+        self.keyboard.set_zones(zones, self.cur.root if self.cur else None)
 
     def _on_select(self, _e=None):
         sel = self.tree.selection()
