@@ -12,6 +12,10 @@ on:
 permissions:
   contents: write
 
+env:
+  PYTHONIOENCODING: utf-8
+  PYTHONUTF8: "1"
+
 jobs:
   build:
     name: ${{ matrix.label }}
@@ -69,12 +73,12 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
+          $env:AURAWAVE_SELFTEST = "1"
           $p = Start-Process -FilePath ".\${{ matrix.asset }}" -PassThru
-          Start-Sleep -Seconds 20
-          if ($p.HasExited) { throw "A program kilepett, kod: $($p.ExitCode)" }
-          Write-Host "A program fut (PID $($p.Id)) - OK"
-          Stop-Process -Id $p.Id -Force
-          Get-Process AuraWave* -ErrorAction SilentlyContinue | Stop-Process -Force
+          if (-not $p.WaitForExit(120000)) { Stop-Process -Id $p.Id -Force; throw "Idotullepes" }
+          Get-Content "$HOME\aurawave_selftest.log"
+          if ($p.ExitCode -ne 0) { throw "Onteszt hiba, kod: $($p.ExitCode)" }
+          Write-Host "Fooblak + 3 modulablak elindult - OK"
 
       - name: macOS .app készítése
         if: runner.os == 'macOS'
@@ -90,12 +94,14 @@ jobs:
         if: runner.os == 'macOS'
         shell: bash
         run: |
-          "dist/AuraWave Genos Studio Pro.app/Contents/MacOS/AuraWave Genos Studio Pro" &
-          PID=$!
-          sleep 20
-          if ! kill -0 $PID 2>/dev/null; then wait $PID; echo "A program kilepett: $?"; exit 1; fi
-          echo "A program fut (PID $PID) - OK"
-          kill $PID
+          export AURAWAVE_SELFTEST=1
+          set +e
+          perl -e 'alarm 120; exec @ARGV' \
+            "dist/AuraWave Genos Studio Pro.app/Contents/MacOS/AuraWave Genos Studio Pro"
+          CODE=$?
+          cat ~/aurawave_selftest.log
+          [ $CODE -eq 0 ] || { echo "Onteszt hiba: $CODE"; exit 1; }
+          echo "Fooblak + 3 modulablak elindult - OK"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -104,7 +110,7 @@ jobs:
 
   release:
     needs: build
-    if: always()
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -117,6 +123,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
         run: |
+          if ! ls out/* >/dev/null 2>&1; then echo "Nincs feltoltheto fajl."; exit 1; fi
           ls -la out
           NOTES="Toltsd le a geped tipusanak megfelelo fajlt, es kattints ra duplan.
           Windows 10/11: AuraWave-Windows.exe

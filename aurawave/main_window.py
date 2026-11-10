@@ -152,7 +152,8 @@ class MainWindow:
 
         for i, b in enumerate(self.buttons):
             b.pulse(self.t * 2 + i)
-        cv.tag_raise("anim", "bg")
+        if cv.find_withtag("bg"):
+            cv.tag_lower("bg")
         self._job = self.root.after(self.FPS_MS, self._animate)
 
     # ------------------------------------------------------------------
@@ -182,6 +183,34 @@ class MainWindow:
 
 
 def run():
+    import os
+    import sys
+    import traceback
+
     root = tk.Tk()
-    MainWindow(root)
+    selftest = os.environ.get("AURAWAVE_SELFTEST") == "1"
+    errors = []
+    if selftest:
+        def report(exc, val, tb):
+            errors.append("".join(traceback.format_exception(exc, val, tb)))
+        root.report_callback_exception = report
+    mw = MainWindow(root)
+    if selftest:
+        # Automatikus próba: mindhárom modulablak megnyitása, majd kilépés.
+        def step(i=0):
+            keys = ["style", "cutter", "looper"]
+            if i < len(keys):
+                try:
+                    mw.open(keys[i])
+                except Exception:
+                    errors.append(traceback.format_exc())
+                root.after(1500, lambda: step(i + 1))
+            else:
+                root.after(2000, root.destroy)
+        root.after(2000, step)
     root.mainloop()
+    if selftest:
+        log = os.path.join(os.path.expanduser("~"), "aurawave_selftest.log")
+        with open(log, "w", encoding="utf-8") as fh:
+            fh.write("\n".join(errors) if errors else "OK")
+        sys.exit(1 if errors else 0)
