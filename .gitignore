@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.sty
+*.wav
+!tests/data/*.wav

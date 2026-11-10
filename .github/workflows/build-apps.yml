@@ -1,0 +1,129 @@
+name: Build AuraWave apps
+
+# Minden push után önálló, Python nélkül futó programot készít
+# Windowsra (.exe) és macOS-re (.app), kipróbálja, hogy elindul-e,
+# majd feltölti a "v1.0.0" kiadáshoz állandó letöltési linkekkel.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: Windows 10-11
+            os: windows-latest
+            python: "3.12"
+            pyinstaller: "pyinstaller"
+            asset: AuraWave-Windows.exe
+          - label: Windows 7
+            os: windows-latest
+            python: "3.8"
+            pyinstaller: "pyinstaller==5.13.2"
+            asset: AuraWave-Windows7.exe
+          - label: Mac Apple Silicon (M1-M4)
+            os: macos-latest
+            python: "3.12"
+            pyinstaller: "pyinstaller"
+            asset: AuraWave-Mac-AppleSilicon.zip
+          - label: Mac Intel
+            os: macos-15-intel
+            python: "3.12"
+            pyinstaller: "pyinstaller"
+            asset: AuraWave-Mac-Intel.zip
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Csomagok telepítése
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt "${{ matrix.pyinstaller }}"
+
+      - name: Motor-tesztek
+        shell: bash
+        run: python tests/test_engine.py
+
+      - name: Windows .exe készítése
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          python -m PyInstaller --noconfirm --clean --onefile --windowed \
+            --name AuraWaveGenosStudioPro main.py
+          cp dist/AuraWaveGenosStudioPro.exe "${{ matrix.asset }}"
+
+      - name: Indítási próba (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath ".\${{ matrix.asset }}" -PassThru
+          Start-Sleep -Seconds 20
+          if ($p.HasExited) { throw "A program kilepett, kod: $($p.ExitCode)" }
+          Write-Host "A program fut (PID $($p.Id)) - OK"
+          Stop-Process -Id $p.Id -Force
+          Get-Process AuraWave* -ErrorAction SilentlyContinue | Stop-Process -Force
+
+      - name: macOS .app készítése
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          python -m PyInstaller --noconfirm --clean --windowed --onedir \
+            --name "AuraWave Genos Studio Pro" \
+            --osx-bundle-identifier com.aurawave.genosstudiopro main.py
+          ditto -c -k --sequesterRsrc --keepParent \
+            "dist/AuraWave Genos Studio Pro.app" "${{ matrix.asset }}"
+
+      - name: Indítási próba (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          "dist/AuraWave Genos Studio Pro.app/Contents/MacOS/AuraWave Genos Studio Pro" &
+          PID=$!
+          sleep 20
+          if ! kill -0 $PID 2>/dev/null; then wait $PID; echo "A program kilepett: $?"; exit 1; fi
+          echo "A program fut (PID $PID) - OK"
+          kill $PID
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: ${{ matrix.asset }}
+
+  release:
+    needs: build
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+          merge-multiple: true
+
+      - name: Kiadás frissítése
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          ls -la out
+          NOTES="Toltsd le a geped tipusanak megfelelo fajlt, es kattints ra duplan.
+          Windows 10/11: AuraWave-Windows.exe
+          Windows 7: AuraWave-Windows7.exe
+          Mac (M1/M2/M3/M4): AuraWave-Mac-AppleSilicon.zip
+          Mac (Intel): AuraWave-Mac-Intel.zip"
+          gh release view v1.0.0 --repo "$REPO" >/dev/null 2>&1 || \
+            gh release create v1.0.0 --repo "$REPO" --target "$GITHUB_SHA" \
+              --title "AuraWave Genos Studio Pro 1.0" --notes "$NOTES" --latest
+          gh release upload v1.0.0 out/* --repo "$REPO" --clobber

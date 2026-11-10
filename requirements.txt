@@ -1,0 +1,3 @@
+numpy>=1.22
+# Opcionális: alacsonyabb késleltetésű előhallgatás minden platformon
+# sounddevice>=0.4
